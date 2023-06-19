@@ -1,0 +1,9 @@
+D:\Programs\Godot Engine\Chess\.mono\temp\bin\Debug\Chess.dll
+D:\Programs\Godot Engine\Chess\.mono\temp\bin\Debug\Chess.pdb
+D:\Programs\Godot Engine\Chess\.mono\temp\obj\Debug\Chess.csproj.AssemblyReference.cache
+D:\Programs\Godot Engine\Chess\.mono\temp\obj\Debug\Chess.GeneratedMSBuildEditorConfig.editorconfig
+D:\Programs\Godot Engine\Chess\.mono\temp\obj\Debug\Chess.AssemblyInfoInputs.cache
+D:\Programs\Godot Engine\Chess\.mono\temp\obj\Debug\Chess.AssemblyInfo.cs
+D:\Programs\Godot Engine\Chess\.mono\temp\obj\Debug\Chess.csproj.CoreCompileInputs.cache
+D:\Programs\Godot Engine\Chess\.mono\temp\obj\Debug\Chess.dll
+D:\Programs\Godot Engine\Chess\.mono\temp\obj\Debug\Chess.pdb

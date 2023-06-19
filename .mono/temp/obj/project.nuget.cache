@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "4xi30KDeqpF/JKIOx4pF7ahDWoYMpVQHCDpuO/i4MwRkRBUxXap2UDdnoldX8c0oKwBZT/J0yp4i7C51S8qEQQ==",
+  "success": true,
+  "projectFilePath": "D:\\Programs\\Godot Engine\\Chess\\Chess.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\phung\\.nuget\\packages\\microsoft.netframework.referenceassemblies\\1.0.3\\microsoft.netframework.referenceassemblies.1.0.3.nupkg.sha512",
+    "C:\\Users\\phung\\.nuget\\packages\\microsoft.netframework.referenceassemblies.net472\\1.0.3\\microsoft.netframework.referenceassemblies.net472.1.0.3.nupkg.sha512"
+  ],
+  "logs": []
+}
