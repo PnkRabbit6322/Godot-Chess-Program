@@ -15,7 +15,6 @@ func _ready():
 	volume_silder.max_value = 1
 
 func _on_Start_pressed():
-	print(get_tree().current_scene)
 	get_tree().current_scene.placePieces(side_btn.get_item_text(side_btn.selected))
 	self.visible = false
 	get_node("CanvasLayer").visible = false

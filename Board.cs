@@ -604,6 +604,10 @@ public class Board : TileMap
         pawns = GetTree().GetNodesInGroup("pawns");
 
         wPiece_bb = bPiece_bb = empty;
+        for (int i = 0; i < 12; i++)
+        {
+            pieces_bb[i] = empty;
+        }
 
         castle_right = 15; //binary 1111: both side can castle king & queen side
         enpassant_target = -1;
@@ -770,13 +774,9 @@ public class Board : TileMap
     {
         UInt64 legal_king_move = 0;
 
-        UInt64 mask = king_attack[square] & ~occupancy;
+        UInt64 mask = (side == enumSide.white) ? king_attack[square] & ~wPiece_bb : king_attack[square] & ~bPiece_bb;
         int[] pseudo_move_arr = get_bits_index_array(mask);
 
-        if (!is_in_check(enumSide.white).Equals(empty))
-            GD.Print("A");
-        if (!is_in_check(enumSide.black).Equals(empty))
-            GD.Print("B");
         int fail = 0;
         if (side == enumSide.white)
         {
@@ -796,7 +796,7 @@ public class Board : TileMap
                 if (fail == 0) legal_king_move |= (UInt64)1 << pseudo_move;
                 fail = 0;
             }
-            if (!((uint)castle_right & (uint)enumCastle.wk).Equals(empty))
+            if (!(((uint)castle_right & (uint)enumCastle.wk) == 0))
             {
                 if ((occupancy & (UInt64)0x60).Equals(empty))
                 {
@@ -806,7 +806,7 @@ public class Board : TileMap
                     }
                 }
             }
-            if (!((uint)castle_right & (uint)enumCastle.wq).Equals(empty))
+            if (!(((uint)castle_right & (uint)enumCastle.wq) == 0))
             {
                 if ((occupancy & (UInt64)0xE).Equals(empty))
                 {
@@ -833,7 +833,7 @@ public class Board : TileMap
                 if (fail == 0) legal_king_move |= (UInt64)1 << pseudo_move;
                 fail = 0;
             }
-            if (!((uint)castle_right & (uint)enumCastle.bk).Equals(empty))
+            if (!(((uint)castle_right & (uint)enumCastle.bk) == 0))
             {
                 if ((occupancy & (UInt64)0x06000000000000000).Equals(empty))
                 {
@@ -843,7 +843,7 @@ public class Board : TileMap
                     }
                 }
             }
-            if (!((uint)castle_right & (uint)enumCastle.bq).Equals(empty))
+            if (!(((uint)castle_right & (uint)enumCastle.bq) == 0))
             {
                 if ((occupancy & (UInt64)0xE00000000000000).Equals(empty))
                 {
@@ -1268,9 +1268,30 @@ public class Board : TileMap
         castle_right = (int)bb[16];
     }
 
+    public void check_endgame(int side)
+    {
+        for (int i = 0; i < 12; i++)
+        {
+            for (int j = 0; j < 8; j++)
+            {
+                if (!move_List[i, j].is_empty()) goto LoopEnd;
+            }
+        }
+        
+        if (!is_in_check((enumSide)side).Equals(empty))
+        {
+            main.Call("showEndGame", side, "checkmate");
+        } else {
+            main.Call("showEndGame", side, "stalemate");
+        }
+        LoopEnd: return;
+    }
+
     public bool make_move(Node2D piece, int target)
     {
         if (piece == null) return false;
+        bool capture = false;
+        bool check = false;
         int source = pos_to_square(this.WorldToMap(piece.GlobalPosition));
         int fail = 0;
 
@@ -1283,6 +1304,14 @@ public class Board : TileMap
                     if (move_List[get_piece_type(source), i].target_array.Contains(target) && move_List[get_piece_type(source), i].flag == "enpassant")
                     {
                         enpassant(piece, source, target);
+                        capture = true;
+                        if(!(is_in_check((get_piece_type(source) <= 5) ? enumSide.black : enumSide.white).Equals(empty))) check = true;
+                        if (check)
+                        {
+                            main.Call("play_sound", "check");
+                        } else {
+                            main.Call("play_sound", "capture");
+                        }
                         return true;
                     }
                 }
@@ -1291,25 +1320,40 @@ public class Board : TileMap
 
         if (piece.IsInGroup("kings"))
         {
+            bool castle_move = false;
+
             if (target == (int)enumSquare.g1 && move_List[(int)enumPiece.K, 0].target_array.Contains(target) && move_List[(int)enumPiece.K, 0].source == (int)enumSquare.e1)
             {
                 castle((int)enumCastle.wk);
-                return true;
+                castle_move = true;
             }
             if (target == (int)enumSquare.c1 && move_List[(int)enumPiece.K, 0].target_array.Contains(target) && move_List[(int)enumPiece.K, 0].source == (int)enumSquare.e1)
             {
                 castle((int)enumCastle.wq);
-                return true;
+                castle_move = true;
             }
             if (target == (int)enumSquare.g8 && move_List[(int)enumPiece.k, 0].target_array.Contains(target) && move_List[(int)enumPiece.k, 0].source == (int)enumSquare.e8)
             {
                 castle((int)enumCastle.bk);
-                return true;
+                castle_move = true;
             }
             if (target == (int)enumSquare.c8 && move_List[(int)enumPiece.k, 0].target_array.Contains(target) && move_List[(int)enumPiece.k, 0].source == (int)enumSquare.e8)
             {
                 castle((int)enumCastle.bq);
-                return true;
+                castle_move = true;
+            }
+
+            if(!(is_in_check((get_piece_type(source) <= 5) ? enumSide.black : enumSide.white).Equals(empty))) check = true;
+            if (castle_move) 
+            {
+                if (check)
+                {
+                    main.Call("play_sound", "check");
+                    return true;
+                } else {
+                    main.Call("play_sound", "castle");
+                    return true;
+                }
             }
         }
 
@@ -1325,9 +1369,22 @@ public class Board : TileMap
             if (!(((UInt64)1 << target) & occupancy).Equals(empty))
             {
                 main.Call("deletePiece", square_to_pos(target));
+                capture = true;
                 pieces_bb[get_piece_type(target)] = pieces_bb[get_piece_type(target)] & ~((UInt64)1 << target);
             }
             piece.GlobalPosition = this.MapToWorld(square_to_pos(target)) + this.CellSize * 2 / 4;
+            if(!(is_in_check((get_piece_type(source) <= 5) ? enumSide.black : enumSide.white).Equals(empty))) check = true;
+
+            if (check)
+            {
+                main.Call("play_sound", "check");
+            }
+            else if (!check && capture)
+            {
+                main.Call("play_sound", "capture");
+            } else {
+                main.Call("play_sound", "move");
+            }
 
             pieces_bb[get_piece_type(source)] = set_bit(pieces_bb[get_piece_type(source)] & ~((UInt64)1 << source), target);
             wPiece_bb = bPiece_bb = empty;
@@ -1373,6 +1430,162 @@ public class Board : TileMap
             return true;
         }
         return false;
+    }
+
+    public void enpassant(Node2D piece ,int source, int target)
+    {
+        pieces_bb[get_piece_type(enpassant_target)] &= ~((UInt64)1 << enpassant_target);
+        main.Call("deletePiece", square_to_pos(enpassant_target));
+        piece.GlobalPosition = this.MapToWorld(square_to_pos(target)) + this.CellSize * 2 / 4;
+
+        enpassant_bitboard = 0;
+        enpassant_target = -1;
+
+        pieces_bb[get_piece_type(source)] = set_bit(pieces_bb[get_piece_type(source)] & ~((UInt64)1 << source), target);
+        wPiece_bb = bPiece_bb = empty;
+        for (int i = 0; i < 6; i++)
+        {
+            wPiece_bb |= pieces_bb[i];
+        }
+        for (int i = 6; i < 12; i++)
+        {
+            bPiece_bb |= pieces_bb[i];
+        }
+    }
+
+    public void castle(int castle)
+    {
+        if (castle == 1)
+        {
+            //white short castle
+            Node2D king = (Node2D)GetNode("/root/Main/king_white");
+            Node2D rook = (Node2D)GetNode("/root/Main/rook_white_2");
+            pieces_bb[(int)enumPiece.K] = set_bit(empty, (int)enumSquare.g1);
+            pieces_bb[(int)enumPiece.R] = set_bit((pieces_bb[(int)enumPiece.R] & ((UInt64)1 << (int)enumSquare.h1)), (int)enumSquare.f1);
+            king.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.g1)) + this.CellSize * 2 / 4;
+            rook.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.f1)) + this.CellSize * 2 / 4;
+        }
+        if (castle == 2)
+        {
+            //white long castle
+            Node2D king = (Node2D)GetNode("/root/Main/king_white");
+            Node2D rook = (Node2D)GetNode("/root/Main/rook_white_1");
+            pieces_bb[(int)enumPiece.K] = set_bit(empty, (int)enumSquare.c1);
+            pieces_bb[(int)enumPiece.R] = set_bit((pieces_bb[(int)enumPiece.R] & ((UInt64)1 << (int)enumSquare.a1)), (int)enumSquare.d1);
+            king.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.c1)) + this.CellSize * 2 / 4;
+            rook.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.d1)) + this.CellSize * 2 / 4;
+        }
+        if (castle == 4)
+        {
+            //black short castle
+            Node2D king = (Node2D)GetNode("/root/Main/king_black");
+            Node2D rook = (Node2D)GetNode("/root/Main/rook_black_2");
+            pieces_bb[(int)enumPiece.k] = set_bit(empty, (int)enumSquare.g8);
+            pieces_bb[(int)enumPiece.r] = set_bit((pieces_bb[(int)enumPiece.r] & ((UInt64)1 << (int)enumSquare.h8)), (int)enumSquare.f8);
+            king.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.g8)) + this.CellSize * 2 / 4;
+            rook.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.f8)) + this.CellSize * 2 / 4;
+        }
+        if (castle == 8)
+        {
+            //black long castle
+            Node2D king = (Node2D)GetNode("/root/Main/king_black");
+            Node2D rook = (Node2D)GetNode("/root/Main/rook_black_1");
+            pieces_bb[(int)enumPiece.k] = set_bit(empty, (int)enumSquare.c8);
+            pieces_bb[(int)enumPiece.r] = set_bit((pieces_bb[(int)enumPiece.r] & ((UInt64)1 << (int)enumSquare.a8)), (int)enumSquare.d8);
+            king.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.c8)) + this.CellSize * 2 / 4;
+            rook.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.d8)) + this.CellSize * 2 / 4;
+        }
+
+        main.Call("play_sound", "castle");
+
+        wPiece_bb = bPiece_bb = empty;
+        for (int i = 0; i < 6; i++)
+        {
+            wPiece_bb |= pieces_bb[i];
+        }
+        for (int i = 6; i < 12; i++)
+        {
+            bPiece_bb |= pieces_bb[i];
+        }
+    }
+
+    public struct move_list
+    {
+        public move_list(int x, int[] y, UInt64 bb, string sflag)
+        {
+            source = x;
+            target_array = y;
+            target_bb = bb;
+            flag = sflag;
+        }
+
+        public int source {get; set;}
+        public int[] target_array {get; set;}
+        public UInt64 target_bb {get; set;}
+        public string flag {get; set;}
+
+        public bool is_empty()
+        {
+            if (target_bb.Equals(empty)) return true;
+            return false;
+        }
+    }
+
+    public void enpassant_perft(int source, int target)
+    {
+        pieces_bb[get_piece_type(enpassant_target)] &= ~((UInt64)1 << enpassant_target);
+
+        enpassant_bitboard = 0;
+        enpassant_target = -1;
+
+        pieces_bb[get_piece_type(source)] = set_bit(pieces_bb[get_piece_type(source)] & ~((UInt64)1 << source), target);
+        wPiece_bb = bPiece_bb = empty;
+        for (int i = 0; i < 6; i++)
+        {
+            wPiece_bb |= pieces_bb[i];
+        }
+        for (int i = 6; i < 12; i++)
+        {
+            bPiece_bb |= pieces_bb[i];
+        }
+    }
+
+    public void castle_perft(int castle)
+    {
+        if (castle == 1)
+        {
+            //white short castle
+            pieces_bb[(int)enumPiece.K] = set_bit(empty, (int)enumSquare.g1);
+            pieces_bb[(int)enumPiece.R] = set_bit(empty, (int)enumSquare.f1);
+        }
+        if (castle == 2)
+        {
+           //white long castle
+            pieces_bb[(int)enumPiece.K] = set_bit(empty, (int)enumSquare.c1);
+            pieces_bb[(int)enumPiece.R] = set_bit(empty, (int)enumSquare.d1);
+        }
+        if (castle == 4)
+        {
+            //black short castle
+            pieces_bb[(int)enumPiece.k] = set_bit(empty, (int)enumSquare.g8);
+            pieces_bb[(int)enumPiece.r] = set_bit(empty, (int)enumSquare.f8);
+        }
+        if (castle == 8)
+        {
+            //black long castle
+            pieces_bb[(int)enumPiece.k] = set_bit(empty, (int)enumSquare.c8);
+            pieces_bb[(int)enumPiece.r] = set_bit(empty, (int)enumSquare.d8);
+        }
+
+        wPiece_bb = bPiece_bb = empty;
+        for (int i = 0; i < 6; i++)
+        {
+            wPiece_bb |= pieces_bb[i];
+        }
+        for (int i = 6; i < 12; i++)
+        {
+            bPiece_bb |= pieces_bb[i];
+        }
     }
 
     public bool make_move_perft(int source, int target)
@@ -1531,148 +1744,6 @@ public class Board : TileMap
         }
 
         return nodes;
-    }
-
-    public void enpassant_perft(int source, int target)
-    {
-        pieces_bb[get_piece_type(enpassant_target)] &= ~((UInt64)1 << enpassant_target);
-
-        pieces_bb[get_piece_type(source)] = set_bit(pieces_bb[get_piece_type(source)] & ~((UInt64)1 << source), target);
-        wPiece_bb = bPiece_bb = empty;
-        for (int i = 0; i < 6; i++)
-        {
-            wPiece_bb |= pieces_bb[i];
-        }
-        for (int i = 6; i < 12; i++)
-        {
-            bPiece_bb |= pieces_bb[i];
-        }
-    }
-
-    public void enpassant(Node2D piece ,int source, int target)
-    {
-        pieces_bb[get_piece_type(enpassant_target)] &= ~((UInt64)1 << enpassant_target);
-        main.Call("deletePiece", square_to_pos(enpassant_target));
-        piece.GlobalPosition = this.MapToWorld(square_to_pos(target)) + this.CellSize * 2 / 4;
-
-        pieces_bb[get_piece_type(source)] = set_bit(pieces_bb[get_piece_type(source)] & ~((UInt64)1 << source), target);
-        wPiece_bb = bPiece_bb = empty;
-        for (int i = 0; i < 6; i++)
-        {
-            wPiece_bb |= pieces_bb[i];
-        }
-        for (int i = 6; i < 12; i++)
-        {
-            bPiece_bb |= pieces_bb[i];
-        }
-    }
-
-    public void castle_perft(int castle)
-    {
-        if (castle == 1)
-        {
-            //white short castle
-            pieces_bb[(int)enumPiece.K] = set_bit(empty, (int)enumSquare.g1);
-            pieces_bb[(int)enumPiece.R] = set_bit(empty, (int)enumSquare.f1);
-        }
-        if (castle == 2)
-        {
-           //white long castle
-            pieces_bb[(int)enumPiece.K] = set_bit(empty, (int)enumSquare.c1);
-            pieces_bb[(int)enumPiece.R] = set_bit(empty, (int)enumSquare.d1);
-        }
-        if (castle == 4)
-        {
-            //black short castle
-            pieces_bb[(int)enumPiece.k] = set_bit(empty, (int)enumSquare.g8);
-            pieces_bb[(int)enumPiece.r] = set_bit(empty, (int)enumSquare.f8);
-        }
-        if (castle == 8)
-        {
-            //black long castle
-            pieces_bb[(int)enumPiece.k] = set_bit(empty, (int)enumSquare.c8);
-            pieces_bb[(int)enumPiece.r] = set_bit(empty, (int)enumSquare.d8);
-        }
-
-        wPiece_bb = bPiece_bb = empty;
-        for (int i = 0; i < 6; i++)
-        {
-            wPiece_bb |= pieces_bb[i];
-        }
-        for (int i = 6; i < 12; i++)
-        {
-            bPiece_bb |= pieces_bb[i];
-        }
-    }
-
-    public void castle(int castle)
-    {
-        if (castle == 1)
-        {
-            //white short castle
-            Node2D king = (Node2D)GetNode("/root/Main/king_white");
-            Node2D rook = (Node2D)GetNode("/root/Main/rook_white_2");
-            pieces_bb[(int)enumPiece.K] = set_bit(empty, (int)enumSquare.g1);
-            pieces_bb[(int)enumPiece.R] = set_bit((pieces_bb[(int)enumPiece.R] & ((UInt64)1 << (int)enumSquare.h1)), (int)enumSquare.f1);
-            king.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.g1)) + this.CellSize * 2 / 4;
-            rook.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.f1)) + this.CellSize * 2 / 4;
-        }
-        if (castle == 2)
-        {
-            //white long castle
-            Node2D king = (Node2D)GetNode("/root/Main/king_white");
-            Node2D rook = (Node2D)GetNode("/root/Main/rook_white_1");
-            pieces_bb[(int)enumPiece.K] = set_bit(empty, (int)enumSquare.c1);
-            pieces_bb[(int)enumPiece.R] = set_bit((pieces_bb[(int)enumPiece.R] & ((UInt64)1 << (int)enumSquare.a1)), (int)enumSquare.d1);
-            king.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.c1)) + this.CellSize * 2 / 4;
-            rook.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.d1)) + this.CellSize * 2 / 4;
-        }
-        if (castle == 4)
-        {
-            //black short castle
-            Node2D king = (Node2D)GetNode("/root/Main/king_black");
-            Node2D rook = (Node2D)GetNode("/root/Main/rook_black_2");
-            pieces_bb[(int)enumPiece.k] = set_bit(empty, (int)enumSquare.g8);
-            pieces_bb[(int)enumPiece.r] = set_bit((pieces_bb[(int)enumPiece.r] & ((UInt64)1 << (int)enumSquare.h8)), (int)enumSquare.f8);
-            king.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.g8)) + this.CellSize * 2 / 4;
-            rook.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.f8)) + this.CellSize * 2 / 4;
-        }
-        if (castle == 8)
-        {
-            //black long castle
-            Node2D king = (Node2D)GetNode("/root/Main/king_black");
-            Node2D rook = (Node2D)GetNode("/root/Main/rook_black_1");
-            pieces_bb[(int)enumPiece.k] = set_bit(empty, (int)enumSquare.c8);
-            pieces_bb[(int)enumPiece.r] = set_bit((pieces_bb[(int)enumPiece.r] & ((UInt64)1 << (int)enumSquare.a8)), (int)enumSquare.d8);
-            king.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.c8)) + this.CellSize * 2 / 4;
-            rook.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.d8)) + this.CellSize * 2 / 4;
-        }
-
-        wPiece_bb = bPiece_bb = empty;
-        for (int i = 0; i < 6; i++)
-        {
-            wPiece_bb |= pieces_bb[i];
-        }
-        for (int i = 6; i < 12; i++)
-        {
-            bPiece_bb |= pieces_bb[i];
-        }
-    }
-
-    public struct move_list
-    {
-        public move_list(int x, int[] y, UInt64 bb, string sflag)
-        {
-            source = x;
-            target_array = y;
-            target_bb = bb;
-            flag = sflag;
-        }
-
-        public int source {get; set;}
-        public int[] target_array {get; set;}
-        public UInt64 target_bb {get; set;}
-        public string flag {get; set;}
     }
 
     Node2D main;
