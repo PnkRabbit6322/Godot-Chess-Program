@@ -1,10 +1,11 @@
-[gd_scene load_steps=7 format=2]
+[gd_scene load_steps=8 format=2]
 
 [ext_resource path="res://Assets/ChessBoard_TileMap.png" type="Texture" id=1]
 [ext_resource path="res://Board.gd" type="Script" id=2]
 [ext_resource path="res://PromoteMenu.tscn" type="PackedScene" id=3]
 [ext_resource path="res://Board.cs" type="Script" id=4]
-[ext_resource path="res://ChooseSideMenu.tscn" type="PackedScene" id=5]
+[ext_resource path="res://StartMenu.tscn" type="PackedScene" id=6]
+[ext_resource path="res://Assets/Sound/move-self.mp3" type="AudioStream" id=7]
 
 [sub_resource type="TileSet" id=1]
 0/name = "ChessBoard_TileMap.png 0"
@@ -90,10 +91,6 @@ script = ExtResource( 4 )
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
 
-[node name="ChooseSideMenu" parent="CanvasLayer" instance=ExtResource( 5 )]
-margin_left = -25.0
-margin_right = 25.0
-
 [node name="PromoteMenu" parent="CanvasLayer" instance=ExtResource( 3 )]
 pause_mode = 2
 visible = false
@@ -105,3 +102,9 @@ margin_left = -38.0
 margin_top = -55.0
 margin_right = 38.0
 margin_bottom = 55.0
+
+[node name="Menu" parent="CanvasLayer" instance=ExtResource( 6 )]
+
+[node name="AudioPlayer" type="AudioStreamPlayer" parent="."]
+stream = ExtResource( 7 )
+volume_db = 12.0

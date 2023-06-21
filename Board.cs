@@ -1398,22 +1398,22 @@ public class Board : TileMap
         {
             if (target == (int)enumSquare.g1 && move_List[(int)enumPiece.K, 0].target_array.Contains(target) && move_List[(int)enumPiece.K, 0].source == (int)enumSquare.e1)
             {
-                castle((int)enumCastle.wk);
+                castle_perft((int)enumCastle.wk);
                 return true;
             }
             if (target == (int)enumSquare.c1 && move_List[(int)enumPiece.K, 0].target_array.Contains(target) && move_List[(int)enumPiece.K, 0].source == (int)enumSquare.e1)
             {
-                castle((int)enumCastle.wq);
+                castle_perft((int)enumCastle.wq);
                 return true;
             }
             if (target == (int)enumSquare.g8 && move_List[(int)enumPiece.k, 0].target_array.Contains(target) && move_List[(int)enumPiece.k, 0].source == (int)enumSquare.e8)
             {
-                castle((int)enumCastle.bk);
+                castle_perft((int)enumCastle.bk);
                 return true;
             }
             if (target == (int)enumSquare.c8 && move_List[(int)enumPiece.k, 0].target_array.Contains(target) && move_List[(int)enumPiece.k, 0].source == (int)enumSquare.e8)
             {
-                castle((int)enumCastle.bq);
+                castle_perft((int)enumCastle.bq);
                 return true;
             }
         }
@@ -1610,34 +1610,42 @@ public class Board : TileMap
         if (castle == 1)
         {
             //white short castle
+            Node2D king = (Node2D)GetNode("/root/Main/king_white");
+            Node2D rook = (Node2D)GetNode("/root/Main/rook_white_2");
             pieces_bb[(int)enumPiece.K] = set_bit(empty, (int)enumSquare.g1);
             pieces_bb[(int)enumPiece.R] = set_bit((pieces_bb[(int)enumPiece.R] & ((UInt64)1 << (int)enumSquare.h1)), (int)enumSquare.f1);
-            // piece.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.g1)) + this.CellSize * 2 / 4;
-            // piece.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.f1)) + this.CellSize * 2 / 4;
+            king.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.g1)) + this.CellSize * 2 / 4;
+            rook.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.f1)) + this.CellSize * 2 / 4;
         }
         if (castle == 2)
         {
-           //white long castle
+            //white long castle
+            Node2D king = (Node2D)GetNode("/root/Main/king_white");
+            Node2D rook = (Node2D)GetNode("/root/Main/rook_white_1");
             pieces_bb[(int)enumPiece.K] = set_bit(empty, (int)enumSquare.c1);
             pieces_bb[(int)enumPiece.R] = set_bit((pieces_bb[(int)enumPiece.R] & ((UInt64)1 << (int)enumSquare.a1)), (int)enumSquare.d1);
-            // piece.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.c1)) + this.CellSize * 2 / 4;
-            // piece.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.d1)) + this.CellSize * 2 / 4;
+            king.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.c1)) + this.CellSize * 2 / 4;
+            rook.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.d1)) + this.CellSize * 2 / 4;
         }
         if (castle == 4)
         {
             //black short castle
+            Node2D king = (Node2D)GetNode("/root/Main/king_black");
+            Node2D rook = (Node2D)GetNode("/root/Main/rook_black_2");
             pieces_bb[(int)enumPiece.k] = set_bit(empty, (int)enumSquare.g8);
             pieces_bb[(int)enumPiece.r] = set_bit((pieces_bb[(int)enumPiece.r] & ((UInt64)1 << (int)enumSquare.h8)), (int)enumSquare.f8);
-            // piece.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.g8)) + this.CellSize * 2 / 4;
-            // piece.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.f8)) + this.CellSize * 2 / 4;
+            king.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.g8)) + this.CellSize * 2 / 4;
+            rook.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.f8)) + this.CellSize * 2 / 4;
         }
         if (castle == 8)
         {
             //black long castle
+            Node2D king = (Node2D)GetNode("/root/Main/king_black");
+            Node2D rook = (Node2D)GetNode("/root/Main/rook_black_1");
             pieces_bb[(int)enumPiece.k] = set_bit(empty, (int)enumSquare.c8);
             pieces_bb[(int)enumPiece.r] = set_bit((pieces_bb[(int)enumPiece.r] & ((UInt64)1 << (int)enumSquare.a8)), (int)enumSquare.d8);
-            // piece.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.c8)) + this.CellSize * 2 / 4;
-            // piece.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.d8)) + this.CellSize * 2 / 4;
+            king.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.c8)) + this.CellSize * 2 / 4;
+            rook.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.d8)) + this.CellSize * 2 / 4;
         }
 
         wPiece_bb = bPiece_bb = empty;
@@ -1693,15 +1701,15 @@ public class Board : TileMap
         enpassant_target = -1;
         enpassant_bitboard = 0;
 
-        var watch = new System.Diagnostics.Stopwatch();
+        // var watch = new System.Diagnostics.Stopwatch();
             
-        watch.Start();
+        // watch.Start();
 
-        GD.Print(perft(5, true));
+        // GD.Print(perft(5, true));
 
-        watch.Stop();
+        // watch.Stop();
 
-        GD.Print(watch.ElapsedMilliseconds);
+        // GD.Print(watch.ElapsedMilliseconds);
     }
 
     // Called every frame. 'delta' is the elapsed time since the previous frame.

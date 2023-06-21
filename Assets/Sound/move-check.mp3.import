@@ -1,0 +1,15 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+path="res://.import/move-check.mp3-a7a1b000843a938637005fe8cff94306.mp3str"
+
+[deps]
+
+source_file="res://Assets/Sound/move-check.mp3"
+dest_files=[ "res://.import/move-check.mp3-a7a1b000843a938637005fe8cff94306.mp3str" ]
+
+[params]
+
+loop=false
+loop_offset=0

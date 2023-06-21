@@ -13,6 +13,11 @@ var Knight_Black = preload("res://Knight_Black.tscn")
 var Pawn_White = preload("res://Pawn_White.tscn")
 var Pawn_Black = preload("res://Pawn_Black.tscn")
 
+var sound_capture = preload("res://Assets/Sound/capture.mp3")
+var sound_move = preload("res://Assets/Sound/move-self.mp3")
+var sound_check = preload("res://Assets/Sound/move-check.mp3")
+var sound_castle = preload("res://Assets/Sound/castle.mp3")
+
 var king_white
 var king_black
 var queen_white
@@ -33,6 +38,7 @@ var pawn_white = []
 var pawn_black = []
 
 onready var board = $Board
+onready var audio_player = get_node("AudioPlayer")
 
 var global_cells_pos = []
 var board_dict = {
@@ -64,6 +70,19 @@ var castle_rook = []
 
 signal checkEndGame
 signal checkPromote
+
+
+
+func play_sound(sound):
+	if sound == "check":
+		audio_player.stream = sound_check
+	if sound == "move":
+		audio_player.stream = sound_move
+	if sound == "capture":
+		audio_player.stream = sound_capture
+	if sound == "castle":
+		audio_player.stream = sound_castle
+	audio_player.play()
 
 func find_key(dict, value):
 	var dict_keys = dict.keys()
@@ -189,6 +208,57 @@ func mapBoard():
 	var board_dict_keys = board_dict.keys()
 	for i in range(global_cells_pos.size()):
 		board_dict[board_dict_keys[i]] = board.world_to_map(global_cells_pos[i] + board.cell_size * 0.5)
+		
+func placePieces(side) -> void:
+	play_as = side
+	
+	var used_cells = board.get_used_cells()
+	for i in used_cells:
+		global_cells_pos.append(board.map_to_world(i))
+		
+	add_child(rook_black_1)
+	rook_black_1.global_position = global_cells_pos[0] + board.cell_size * 0.5
+	add_child(knight_black_1)
+	knight_black_1.global_position = global_cells_pos[1] + board.cell_size * 0.5
+	add_child(bishop_black_1)
+	bishop_black_1.global_position = global_cells_pos[2] + board.cell_size * 0.5
+	add_child(queen_black)
+	queen_black.global_position = global_cells_pos[3] + board.cell_size * 0.5
+	add_child(king_black)
+	king_black.global_position = global_cells_pos[4] + board.cell_size * 0.5
+	add_child(bishop_black_2)
+	bishop_black_2.global_position = global_cells_pos[5] + board.cell_size * 0.5
+	add_child(knight_black_2)
+	knight_black_2.global_position = global_cells_pos[6] + board.cell_size * 0.5
+	add_child(rook_black_2)
+	rook_black_2.global_position = global_cells_pos[7] + board.cell_size * 0.5
+	for i in range(pawn_black.size()):
+		add_child(pawn_black[i])
+		pawn_black[i].global_position = global_cells_pos[i+8] + board.cell_size * 0.5
+		
+	add_child(rook_white_1)
+	rook_white_1.global_position = global_cells_pos[56] + board.cell_size * 0.5
+	add_child(knight_white_1)
+	knight_white_1.global_position = global_cells_pos[57] + board.cell_size * 0.5
+	add_child(bishop_white_1)
+	bishop_white_1.global_position = global_cells_pos[58] + board.cell_size * 0.5
+	add_child(queen_white)
+	queen_white.global_position = global_cells_pos[59] + board.cell_size * 0.5
+	add_child(king_white)
+	king_white.global_position = global_cells_pos[60] + board.cell_size * 0.5
+	add_child(bishop_white_2)
+	bishop_white_2.global_position = global_cells_pos[61] + board.cell_size * 0.5
+	add_child(knight_white_2)
+	knight_white_2.global_position = global_cells_pos[62] + board.cell_size * 0.5
+	add_child(rook_white_2)
+	rook_white_2.global_position = global_cells_pos[63] + board.cell_size * 0.5
+	for i in range(pawn_white.size()):
+		add_child(pawn_white[i])
+		pawn_white[i].global_position = global_cells_pos[i+48] + board.cell_size * 0.5
+	board.visible = true
+	mapBoard()
+	board.gen_bitboard()
+	board.gen_legal_move(0)
 
 func placePiecesWhite() -> void:
 	play_as = "White"
@@ -290,7 +360,7 @@ func placePiecesBlack() -> void:
 	board.visible = true
 	mapBoard()
 	board.gen_bitboard()
-	board.gen_legal_move(1)
+	board.gen_legal_move(0)
 
 func _ready():
 	init()
@@ -345,8 +415,6 @@ func tileHasPiece(pos):
 func deletePiece(pos):
 	for node in get_tree().get_nodes_in_group("pieces"):
 		if board.world_to_map(node.global_position) == pos:
-			#node.get_parent().remove_child(node)
-			#node.call_deferred("free")
 			node.global_position = Vector2(9999, 9999);
 	
 func checkTurn() -> bool:
@@ -381,6 +449,7 @@ func mouseEvent():
 			#testMove()
 			if !board.make_move(selected_piece, board.pos_to_square(tile_pos_cur)):
 				return
+			play_sound("capture")
 			emit_signal("checkPromote")
 			turn_token = !turn_token
 			if turn_token:
@@ -396,6 +465,7 @@ func mouseEvent():
 			#testMove()
 			if !board.make_move(selected_piece, board.pos_to_square(tile_pos_cur)):
 				return
+			play_sound("move")
 			emit_signal("checkPromote")
 			turn_token = !turn_token
 			if turn_token:

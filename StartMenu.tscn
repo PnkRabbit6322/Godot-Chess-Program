@@ -1,0 +1,81 @@
+[gd_scene load_steps=7 format=2]
+
+[ext_resource path="res://Assets/Icon.png" type="Texture" id=1]
+[ext_resource path="res://Assets/start.png" type="Texture" id=2]
+[ext_resource path="res://Assets/quit.png" type="Texture" id=3]
+[ext_resource path="res://Assets/settings.png" type="Texture" id=4]
+[ext_resource path="res://StartMenu.gd" type="Script" id=5]
+[ext_resource path="res://Assets/volume.png" type="Texture" id=6]
+
+[node name="Menu" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource( 5 )
+
+[node name="Start" type="Button" parent="."]
+margin_left = 64.0
+margin_top = 296.0
+margin_right = 256.0
+margin_bottom = 344.0
+icon = ExtResource( 2 )
+icon_align = 1
+
+[node name="Settings" type="Button" parent="."]
+margin_left = 64.0
+margin_top = 368.0
+margin_right = 256.0
+margin_bottom = 416.0
+icon = ExtResource( 4 )
+icon_align = 1
+
+[node name="Quit" type="Button" parent="."]
+margin_left = 64.0
+margin_top = 440.0
+margin_right = 256.0
+margin_bottom = 488.0
+icon = ExtResource( 3 )
+icon_align = 1
+
+[node name="Side" type="OptionButton" parent="."]
+margin_left = 320.0
+margin_top = 304.0
+margin_right = 448.0
+margin_bottom = 336.0
+text = "White"
+items = [ "White", null, false, 0, null, "Black", null, false, 1, null ]
+selected = 0
+
+[node name="VolumeSlider" type="HSlider" parent="."]
+visible = false
+margin_left = 320.0
+margin_top = 400.0
+margin_right = 448.0
+margin_bottom = 416.0
+min_value = 1.0
+value = 1.0
+
+[node name="TextureRect" type="TextureRect" parent="VolumeSlider"]
+margin_top = -32.0
+margin_right = 128.0
+margin_bottom = -8.0
+texture = ExtResource( 6 )
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+layer = -1
+
+[node name="Icon" type="TextureRect" parent="CanvasLayer"]
+margin_right = 512.0
+margin_bottom = 288.0
+texture = ExtResource( 1 )
+
+[node name="Backgound" type="ColorRect" parent="CanvasLayer/Icon"]
+show_behind_parent = true
+margin_right = 512.0
+margin_bottom = 512.0
+color = Color( 0.0117647, 0.505882, 0.721569, 1 )
+
+[connection signal="pressed" from="Start" to="." method="_on_Start_pressed"]
+[connection signal="pressed" from="Settings" to="." method="_on_Settings_pressed"]
+[connection signal="pressed" from="Quit" to="." method="_on_Quit_pressed"]
+[connection signal="item_selected" from="Side" to="." method="_on_Side_item_selected"]
+[connection signal="drag_ended" from="VolumeSlider" to="." method="_on_HSlider_drag_ended"]

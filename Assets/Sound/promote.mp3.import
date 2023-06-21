@@ -1,0 +1,15 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+path="res://.import/promote.mp3-ed20ba1b7b0c8a5d7de3f2b80321a924.mp3str"
+
+[deps]
+
+source_file="res://Assets/Sound/promote.mp3"
+dest_files=[ "res://.import/promote.mp3-ed20ba1b7b0c8a5d7de3f2b80321a924.mp3str" ]
+
+[params]
+
+loop=false
+loop_offset=0
