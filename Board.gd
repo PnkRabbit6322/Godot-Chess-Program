@@ -249,15 +249,10 @@ func _ready():
 	connect("checkPromote", self, "checkPromote")
 
 func resetBoard():
-	var flip = true
-	for x in range(0, 8):
-		flip = !flip
-		for y in range(0, 8):
-			if flip:
-				board.set_cellv(Vector2(x, y), 0)
-			else:
-				board.set_cellv(Vector2(x, y), 1)
-			flip = !flip
+	var overlay = board.get_node("Overlay")
+	var used_cells = overlay.get_used_cells()
+	for i in used_cells:
+		overlay.set_cellv(i, 1);
 
 func showEndGame(side, type):
 	for node in get_tree().get_nodes_in_group("pieces"):
@@ -279,11 +274,15 @@ func enablePromoteMenu(piece):
 		
 func highlightSquare(pos) -> void:
 	var tile_index = board.get_cellv(pos)
+	var overlay = board.get_node("Overlay")
 	
-	if tile_index == 0:
-		board.set_cellv(pos, 2)
-	if tile_index == 1:
-		board.set_cellv(pos, 3)
+	var green_tile = [0, 5, 7, 9, 11, 14, 16, 18]
+	var white_tile = [1, 6, 8, 10, 12, 13, 15, 17, 19]
+	
+	if green_tile.has(tile_index):
+		overlay.set_cellv(pos, 3)
+	if white_tile.has(tile_index):
+		overlay.set_cellv(pos, 2)
 
 func checkTile(pos):
 	for node in get_tree().get_nodes_in_group("pieces"):

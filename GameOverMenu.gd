@@ -13,7 +13,8 @@ var endgame_text_drawRepetition = preload("res://Assets/Repetition.png")
 
 # Called when the node enters the scene tree for the first time.
 func _ready():
-	pass # Replace with function body.
+	self.visible = false
+	get_node("CanvasLayer").visible = false
 
 func _on_Quit_pressed():
 	get_tree().quit()
