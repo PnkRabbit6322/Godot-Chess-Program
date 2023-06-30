@@ -233,6 +233,9 @@ func placePieces(side) -> void:
 	board.visible = true
 	board.gen_bitboard()
 	board.gen_legal_move(0)
+	if play_as == "Black":
+		board.play_next(0)
+		turn_token = false
 
 func _ready():
 	init()
@@ -341,15 +344,18 @@ func mouseEvent():
 				return
 			emit_signal("checkPromote")
 			turn_token = !turn_token
-			if turn_token:
-				board.gen_legal_move(0)
-				board.check_endgame(0)
-			elif !turn_token:
-				board.gen_legal_move(1)
-				board.check_endgame(1)
-			selected_piece = null
+			#if turn_token:
+			#	board.gen_legal_move(0)
+			#	board.check_endgame(0)
+			#elif !turn_token:
+			#	board.gen_legal_move(1)
+			#	board.check_endgame(1)
+			if play_as == "White":
+				board.play_next(1)
+			elif play_as == "Black":
+				board.play_next(0)
 			
-			#playMove(board.alphaBetaRoot(depth, isMaximizePlayer))
+			selected_piece = null
 			resetBoard()
 	elif selected_piece != null:
 		if checkTurn():
@@ -357,14 +363,17 @@ func mouseEvent():
 				return
 			emit_signal("checkPromote")
 			turn_token = !turn_token
-			if turn_token:
-				board.gen_legal_move(0)
-				board.check_endgame(0)
-			elif !turn_token:
-				board.gen_legal_move(1)
-				board.check_endgame(1)
+			#if turn_token:
+			#	board.gen_legal_move(0)
+			#	board.check_endgame(0)
+			#elif !turn_token:
+			#	board.gen_legal_move(1)
+			#	board.check_endgame(1)
+			if play_as == "White":
+				board.play_next(1)
+			elif play_as == "Black":
+				board.play_next(0)
 			selected_piece = null
-			#playMove(board.alphaBetaRoot(depth, isMaximizePlayer))
 			resetBoard()
 	else: resetBoard()
 

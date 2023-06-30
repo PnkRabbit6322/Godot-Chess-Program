@@ -1,11 +1,102 @@
 using Godot;
 using System;
 using System.Linq;
+using System.Diagnostics;
 using System.Collections.Generic;
-using static System.String;
 
 public class Board : TileMap
 {
+    Process myProcess = new Process();
+    public void init_stockfish_process(int level)
+    {
+        ProcessStartInfo si = new ProcessStartInfo() {
+        FileName = "D:/Programs/Godot Engine/Chess/stockfish_15.1_win_x64_avx2/stockfish-windows-2022-x86-64-avx2.exe",
+        UseShellExecute = false,
+        CreateNoWindow = true,
+        RedirectStandardError = true,
+        RedirectStandardInput = true,
+        RedirectStandardOutput = true
+        };
+
+        myProcess.StartInfo = si;
+        try
+        {
+            // throws an exception on win98
+            myProcess.PriorityClass = ProcessPriorityClass.BelowNormal;
+        } catch {
+            
+        }
+
+        myProcess.OutputDataReceived += new DataReceivedEventHandler(myProcess_OutputDataReceived);
+
+        myProcess.Start();
+        myProcess.BeginErrorReadLine();
+        myProcess.BeginOutputReadLine();
+
+        SendLine("uci");
+        SendLine("setoption name UCI_LimitStrength value true");
+
+        switch (level)
+        {
+            case 0: SendLine("setoption name Skill Level value 1"); SendLine("setoption name UCI_Elo value 1350"); break;
+            case 1: SendLine("setoption name Skill Level value 3"); SendLine("setoption name UCI_Elo value 1500"); break;
+            case 2: SendLine("setoption name Skill Level value 5"); SendLine("setoption name UCI_Elo value 1650"); break;
+            case 3: SendLine("setoption name Skill Level value 7"); SendLine("setoption name UCI_Elo value 1800"); break;
+            case 4: SendLine("setoption name Skill Level value 9"); SendLine("setoption name UCI_Elo value 1950"); break;
+            case 5: SendLine("setoption name Skill Level value 11"); SendLine("setoption name UCI_Elo value 2100"); break;
+            case 6: SendLine("setoption name Skill Level value 13"); SendLine("setoption name UCI_Elo value 2250"); break;
+            case 7: SendLine("setoption name Skill Level value 15"); SendLine("setoption name UCI_Elo value 2400"); break;
+            case 8: SendLine("setoption name Skill Level value 17"); SendLine("setoption name UCI_Elo value 2550"); break;
+            case 9: SendLine("setoption name Skill Level value 19"); SendLine("setoption name UCI_Elo value 2700"); break;
+            case 10: SendLine("setoption name Skill Level value 20"); SendLine("setoption name UCI_Elo value 2850"); break;
+        };
+
+        SendLine("isready");
+        SendLine("ucinewgame");
+        SendLine("position startpos");
+    }
+
+    public void SendLine(string command) {
+        myProcess.StandardInput.WriteLine(command);
+        myProcess.StandardInput.Flush();
+    }
+
+    private void myProcess_OutputDataReceived(object sender, DataReceivedEventArgs e) {
+        string text = e.Data;
+        String[] words = text.Split(' ');
+        if (words[0] == "bestmove")
+        {
+            char[] chars = words[1].ToCharArray();
+            char[] sourceChars = {chars[0], chars[1]};
+            char[] targetChars = {chars[2], chars[3]};
+            String sourceString = new String(sourceChars);
+            String targetString = new String(targetChars);
+            int source = Array.IndexOf(square, sourceString);
+            int target = Array.IndexOf(square, targetString);
+
+            var pieces = new Godot.Collections.Array();
+            pieces = GetTree().GetNodesInGroup("pieces");
+            foreach (Node2D piece in pieces)
+            {
+                if(pos_to_square(WorldToMap(piece.GlobalPosition)) == source)
+                {
+                    make_move(piece, target);
+                    
+                    if (main.Get("play_as").ToString() == "White")
+                        gen_legal_move((int)enumSide.white);
+                    else gen_legal_move((int)enumSide.black);
+                }
+            }
+        }
+    }
+
+    public void stockfish_next_move(String movelist)
+    {
+        String uci_command = "position startpos moves" + movelist;
+        SendLine(uci_command);
+        SendLine("go movetime 1000");
+    }
+
     public enum enumSquare {
         a1, b1, c1, d1, e1, f1, g1, h1,
         a2, b2, c2, d2, e2, f2, g2, h2,
@@ -153,6 +244,7 @@ public class Board : TileMap
 
     public int ls1b_index(UInt64 bb)
     {
+        if (bb == empty) return -1;
         const UInt64 debruijn64 = 0x03f79d71b4cb0a89; 
         return index64[((bb & (~bb + 1)) * debruijn64) >> 58];
     }
@@ -785,6 +877,8 @@ public class Board : TileMap
     {
         UInt64 legal_king_move = 0;
 
+        occupancy &= (side == enumSide.white) ? ~pieces_bb[(int)enumPiece.K] : ~pieces_bb[(int)enumPiece.k];
+
         UInt64 mask = (side == enumSide.white) ? king_attack[square] & ~wPiece_bb : king_attack[square] & ~bPiece_bb;
         int[] pseudo_move_arr = get_bits_index_array(mask);
 
@@ -883,41 +977,107 @@ public class Board : TileMap
             UInt64 attacking_rook = get_rook_attacks(square, bPiece_bb) & pieces_bb[(int)enumPiece.r];
             foreach (int rook_square in get_bits_index_array(attacking_rook))
             {
-                pin_bitboard |= get_rook_attacks(rook_square, occupancy) & get_rook_attacks(square, occupancy) & wPiece_bb;
+                pin_bitboard |= draw_bit_ray(square, ls1b_index(attacking_rook)) & get_rook_attacks(rook_square, occupancy) & get_rook_attacks(square, occupancy) & wPiece_bb;
             }
             //bishop pin
             UInt64 attacking_bishop = get_bishop_attacks(square, bPiece_bb) & pieces_bb[(int)enumPiece.b];
             foreach (int bishop_square in get_bits_index_array(attacking_bishop))
             {
-                pin_bitboard |= get_bishop_attacks(bishop_square, occupancy) & get_bishop_attacks(square, occupancy) & wPiece_bb;
+                pin_bitboard |= draw_bit_ray(square, ls1b_index(attacking_bishop)) & get_bishop_attacks(bishop_square, occupancy) & get_bishop_attacks(square, occupancy) & wPiece_bb;
             }
             //queen pin
             UInt64 attacking_queen = get_queen_attacks(square, bPiece_bb) & pieces_bb[(int)enumPiece.q];
             foreach (int queen_square in get_bits_index_array(attacking_queen))
             {
-                pin_bitboard |= get_queen_attacks(queen_square, occupancy) & get_queen_attacks(square, occupancy) & wPiece_bb;
+                pin_bitboard |= draw_bit_ray(square, ls1b_index(attacking_queen)) & get_queen_attacks(queen_square, occupancy) & get_queen_attacks(square, occupancy) & wPiece_bb;
             }
         } else {
             //rook pin 
             UInt64 attacking_rook = get_rook_attacks(square, wPiece_bb) & pieces_bb[(int)enumPiece.R];
             foreach (int rook_square in get_bits_index_array(attacking_rook))
             {
-                pin_bitboard |= get_rook_attacks(rook_square, occupancy) & get_rook_attacks(square, occupancy) & bPiece_bb;
+                pin_bitboard |= draw_bit_ray(square, ls1b_index(attacking_rook)) & get_rook_attacks(rook_square, occupancy) & get_rook_attacks(square, occupancy) & bPiece_bb;
             }
             //bishop pin
             UInt64 attacking_bishop = get_bishop_attacks(square, wPiece_bb) & pieces_bb[(int)enumPiece.B];
             foreach (int bishop_square in get_bits_index_array(attacking_bishop))
             {
-                pin_bitboard |= get_bishop_attacks(bishop_square, occupancy) & get_bishop_attacks(square, occupancy) & bPiece_bb;
+                pin_bitboard |= draw_bit_ray(square, ls1b_index(attacking_bishop)) & get_bishop_attacks(bishop_square, occupancy) & get_bishop_attacks(square, occupancy) & bPiece_bb;
             }
             //queen pin
             UInt64 attacking_queen = get_queen_attacks(square, wPiece_bb) & pieces_bb[(int)enumPiece.Q];
             foreach (int queen_square in get_bits_index_array(attacking_queen))
             {
-                pin_bitboard |= get_queen_attacks(queen_square, occupancy) & get_queen_attacks(square, occupancy) & bPiece_bb;
+                pin_bitboard |= draw_bit_ray(square, ls1b_index(attacking_queen)) & get_queen_attacks(queen_square, occupancy) & get_queen_attacks(square, occupancy) & bPiece_bb;
             }
         }
         return pin_bitboard;
+    }
+
+    public UInt64 gen_pin_attacker_bitboard(int square, enumSide side, UInt64 occupancy)
+    {
+        //square = king position
+        UInt64 pin_attacker_bitboard = 0;
+
+        if (side == enumSide.white)
+        {
+            //rook pin 
+            UInt64 attacking_rook = get_rook_attacks(square, bPiece_bb) & pieces_bb[(int)enumPiece.r];
+            foreach (int rook_square in get_bits_index_array(attacking_rook))
+            {
+                if(!(get_rook_attacks(rook_square, occupancy) & get_rook_attacks(square, occupancy) & wPiece_bb).Equals(empty))
+                {
+                    pin_attacker_bitboard |= attacking_rook;
+                }
+            }
+            //bishop pin
+            UInt64 attacking_bishop = get_bishop_attacks(square, bPiece_bb) & pieces_bb[(int)enumPiece.b];
+            foreach (int bishop_square in get_bits_index_array(attacking_bishop))
+            {
+                if(!(get_bishop_attacks(bishop_square, occupancy) & get_bishop_attacks(square, occupancy) & wPiece_bb).Equals(empty))
+                {
+                    pin_attacker_bitboard |= attacking_bishop;
+                }
+            }
+            //queen pin
+            UInt64 attacking_queen = get_queen_attacks(square, bPiece_bb) & pieces_bb[(int)enumPiece.q];
+            foreach (int queen_square in get_bits_index_array(attacking_queen))
+            {
+                if(!(get_queen_attacks(queen_square, occupancy) & get_queen_attacks(square, occupancy) & wPiece_bb).Equals(empty))
+                {
+                    pin_attacker_bitboard |= attacking_queen;
+                }
+            }
+        } else {
+            //rook pin 
+            UInt64 attacking_rook = get_rook_attacks(square, wPiece_bb) & pieces_bb[(int)enumPiece.R];
+            foreach (int rook_square in get_bits_index_array(attacking_rook))
+            {
+                if(!(get_rook_attacks(rook_square, occupancy) & get_rook_attacks(square, occupancy) & bPiece_bb).Equals(empty))
+                {
+                    pin_attacker_bitboard |= attacking_rook;
+                }
+            }
+            //bishop pin
+            UInt64 attacking_bishop = get_bishop_attacks(square, wPiece_bb) & pieces_bb[(int)enumPiece.B];
+            foreach (int bishop_square in get_bits_index_array(attacking_bishop))
+            {
+                if(!(get_bishop_attacks(bishop_square, occupancy) & get_bishop_attacks(square, occupancy) & bPiece_bb).Equals(empty))
+                {
+                    pin_attacker_bitboard |= attacking_bishop;
+                }
+            }
+            //queen pin
+            UInt64 attacking_queen = get_queen_attacks(square, wPiece_bb) & pieces_bb[(int)enumPiece.Q];
+            foreach (int queen_square in get_bits_index_array(attacking_queen))
+            {
+                if(!(get_queen_attacks(queen_square, occupancy) & get_queen_attacks(square, occupancy) & bPiece_bb).Equals(empty))
+                {
+                    pin_attacker_bitboard |= attacking_queen;
+                }
+            }
+        }
+        return pin_attacker_bitboard;
     }
 
     public UInt64 draw_bit_ray(int from, int to)
@@ -942,12 +1102,12 @@ public class Board : TileMap
 
         if (from < to)
         {
-            for (int i = from; i < to; i++)
+            for (int i = from; i <= to; i++)
             {
                 mask |= set_bit(mask, i);
             }
         } else {
-            for (int i = to; i < from; i++)
+            for (int i = to; i <= from; i++)
             {
                 mask |= set_bit(mask, i);
             }
@@ -973,7 +1133,10 @@ public class Board : TileMap
         UInt64 push_mask = 0xffffffffffffffff;
 
         UInt64 checkers_mask = (UInt64)0;
+        UInt64 pin_attacker_mask = empty;
         int checkers_num;
+
+        UInt64[] pin_ray = {};
 
         if (side == (int)enumSide.white)
         {
@@ -988,6 +1151,22 @@ public class Board : TileMap
             else
             {
                 pin_bitboard = gen_pin_bitboard(ls1b_index(pieces_bb[(int)enumPiece.K]), (enumSide)side, occupancy);
+                if (count_bits(pin_bitboard) > 0)
+                {
+                    pin_attacker_mask = gen_pin_attacker_bitboard(ls1b_index(pieces_bb[(int)enumPiece.K]), (enumSide)side, occupancy);
+                    List<UInt64> ray_list = new List<UInt64>();
+                    foreach(int pin_piece in get_bits_index_array(pin_bitboard))
+                    {
+                        foreach(int attacking_piece in get_bits_index_array(pin_attacker_mask))
+                        {
+                            if (!draw_bit_ray(pin_piece, attacking_piece).Equals(empty))
+                            {
+                                ray_list.Add(draw_bit_ray(pin_piece, attacking_piece));
+                            }
+                        }
+                    }
+                    pin_ray = ray_list.ToArray();
+                }
                 //knight
                 int[] moveable_knights_index = get_bits_index_array(pieces_bb[(int)enumPiece.N] & ~pin_bitboard);
                 for (i = 0; i < moveable_knights_index.Count(); i++)
@@ -1005,11 +1184,14 @@ public class Board : TileMap
                 {
                     if (pin_rooks_index.Contains(rooks_index[i])){
                         move_List[(int)enumPiece.R, i].source = rooks_index[i];
-                        move_List[(int)enumPiece.R, i].target_bb = get_rook_attacks(rooks_index[i], occupancy) & draw_bit_ray(rooks_index[i], ls1b_index(pieces_bb[(int)enumPiece.K]));
+                        foreach(UInt64 ray in pin_ray)
+                        {
+                            move_List[(int)enumPiece.R, i].target_bb |= get_rook_attacks(rooks_index[i], occupancy) & draw_bit_ray(ls1b_index(ray & pin_attacker_mask), ls1b_index(pieces_bb[(int)enumPiece.K]));
+                        }
                         move_List[(int)enumPiece.R, i].target_bb &= ~wPiece_bb;
                     } else {
                         move_List[(int)enumPiece.R, i].source = rooks_index[i];
-                        move_List[(int)enumPiece.R, i].target_bb = get_rook_attacks(rooks_index[i], occupancy);
+                        move_List[(int)enumPiece.R, i].target_bb |= get_rook_attacks(rooks_index[i], occupancy);
                         move_List[(int)enumPiece.R, i].target_bb &= ~wPiece_bb;
                     }
                 }
@@ -1021,51 +1203,64 @@ public class Board : TileMap
                 {
                     if (pin_bishops_index.Contains(bishops_index[i])){
                         move_List[(int)enumPiece.B, i].source = bishops_index[i];
-                        move_List[(int)enumPiece.B, i].target_bb = get_bishop_attacks(bishops_index[i], occupancy) & draw_bit_ray(bishops_index[i], ls1b_index(pieces_bb[(int)enumPiece.K]));
+                        foreach(UInt64 ray in pin_ray)
+                        {
+                            move_List[(int)enumPiece.B, i].target_bb = get_bishop_attacks(bishops_index[i], occupancy) & draw_bit_ray(ls1b_index(ray & pin_attacker_mask), ls1b_index(pieces_bb[(int)enumPiece.K]));
+                        }
                         move_List[(int)enumPiece.B, i].target_bb &= ~wPiece_bb;
                     } else {
                         move_List[(int)enumPiece.B, i].source = bishops_index[i];
-                        move_List[(int)enumPiece.B, i].target_bb = get_bishop_attacks(bishops_index[i], occupancy);
+                        move_List[(int)enumPiece.B, i].target_bb |= get_bishop_attacks(bishops_index[i], occupancy);
                         move_List[(int)enumPiece.B, i].target_bb &= ~wPiece_bb;
                     }
                 }
 
                 //queen
                 int queen_index = ls1b_index(pieces_bb[(int)enumPiece.Q]);
-                if ((pieces_bb[(int)enumPiece.Q] & pin_bitboard).Equals(empty))
+                if ((pieces_bb[(int)enumPiece.Q] & pin_bitboard).Equals(empty) && queen_index != -1)
                 {
                     move_List[(int)enumPiece.Q, 0].source = queen_index;
-                    move_List[(int)enumPiece.Q, 0].target_bb = get_queen_attacks(queen_index, occupancy);
+                    move_List[(int)enumPiece.Q, 0].target_bb |= get_queen_attacks(queen_index, occupancy);
                     move_List[(int)enumPiece.Q, 0].target_bb &= ~wPiece_bb;
                 } else {
-                    move_List[(int)enumPiece.Q, 0].source = queen_index;
-                    move_List[(int)enumPiece.Q, 0].target_bb = get_queen_attacks(queen_index, occupancy) & draw_bit_ray(queen_index, ls1b_index(pieces_bb[(int)enumPiece.K]));
-                    move_List[(int)enumPiece.Q, 0].target_bb &= ~wPiece_bb;
+                    if (queen_index != -1)
+                    {
+                        move_List[(int)enumPiece.Q, 0].source = queen_index;
+                        foreach (UInt64 ray in pin_ray)
+                        {
+                            move_List[(int)enumPiece.Q, 0].target_bb |= get_queen_attacks(queen_index, occupancy) & draw_bit_ray(ls1b_index(pin_attacker_mask), ls1b_index(pieces_bb[(int)enumPiece.K]));
+                        }
+                        move_List[(int)enumPiece.Q, 0].target_bb &= ~wPiece_bb;
+                    }
                 }
 
                 //pawn
                 int[] pawns_index = get_bits_index_array(pieces_bb[(int)enumPiece.P]);
                 int[] push_pawns_index = get_bits_index_array(wPawnsSinglePushSource(pieces_bb[(int)enumPiece.P], ~occupancy));
-                int[] pin_pawns_index = get_bits_index_array(wPawnsSinglePushSource(pieces_bb[(int)enumPiece.P], ~occupancy) & pin_bitboard);
+                int[] pin_pawns_index = get_bits_index_array(pieces_bb[(int)enumPiece.P] & pin_bitboard);
 
                 for (i = 0; i < pawns_index.Count(); i++)
                 {
                     if (pin_pawns_index.Contains(pawns_index[i]))
                     {
                         move_List[(int)enumPiece.P, i].source = pawns_index[i];
-                        move_List[(int)enumPiece.P, i].target_bb = pawn_attack[(int)enumSide.white, pawns_index[i]] & draw_bit_ray(pawns_index[i], ls1b_index(pieces_bb[(int)enumPiece.K])) & bPiece_bb;
-                        move_List[(int)enumPiece.P, i].target_bb |= wPawnsSinglePushTarget(pieces_bb[(int)enumPiece.P] & pin_bitboard, ~occupancy) & draw_bit_ray(pawns_index[i], ls1b_index(pieces_bb[(int)enumPiece.K])) | wPawnsDoublePushTarget(pieces_bb[(int)enumPiece.P] & pin_bitboard, ~occupancy) & draw_bit_ray(pawns_index[i], ls1b_index(pieces_bb[(int)enumPiece.K]));
-                        if (!enpassant_bitboard.Equals(empty))
+                        foreach(UInt64 ray in pin_ray)
                         {
-                            if(!(pawn_attack[(int)enumSide.white, pawns_index[i]] & draw_bit_ray(pawns_index[i], ls1b_index(pieces_bb[(int)enumPiece.K])) & bPiece_bb).Equals(empty))
+                            move_List[(int)enumPiece.P, i].target_bb |= pawn_attack[(int)enumSide.white, pawns_index[i]] & draw_bit_ray(ls1b_index(ray & pin_attacker_mask), ls1b_index(pieces_bb[(int)enumPiece.K])) & bPiece_bb;
+                            move_List[(int)enumPiece.P, i].target_bb |= wPawnsSinglePushTarget(pieces_bb[(int)enumPiece.P] & pin_bitboard, ~occupancy) & draw_bit_ray(ls1b_index(ray & pin_attacker_mask), ls1b_index(pieces_bb[(int)enumPiece.K]));
+                            move_List[(int)enumPiece.P, i].target_bb |= wPawnsDoublePushTarget(pieces_bb[(int)enumPiece.P] & pin_bitboard, ~occupancy) & draw_bit_ray(ls1b_index(ray & pin_attacker_mask), ls1b_index(pieces_bb[(int)enumPiece.K]));
+                            if (!enpassant_bitboard.Equals(empty))
                             {
-                                move_List[(int)enumPiece.P, i].target_bb |= pawn_attack[(int)enumSide.white, pawns_index[i]] & draw_bit_ray(pawns_index[i], ls1b_index(pieces_bb[(int)enumPiece.K])) & enpassant_bitboard;
-                                move_List[(int)enumPiece.P, i].flag = "enpassant";
+                                if(!(pawn_attack[(int)enumSide.white, pawns_index[i]] & draw_bit_ray(ls1b_index(pin_attacker_mask), ls1b_index(pieces_bb[(int)enumPiece.K])) & bPiece_bb).Equals(empty))
+                                {
+                                    move_List[(int)enumPiece.P, i].target_bb |= pawn_attack[(int)enumSide.white, pawns_index[i]] & draw_bit_ray(ls1b_index(pin_attacker_mask), ls1b_index(pieces_bb[(int)enumPiece.K])) & enpassant_bitboard;
+                                    move_List[(int)enumPiece.P, i].flag = "enpassant";
+                                }
                             }
                         }
                     } else {
                         move_List[(int)enumPiece.P, i].source = pawns_index[i];
-                        move_List[(int)enumPiece.P, i].target_bb = pawn_attack[(int)enumSide.white, pawns_index[i]] & bPiece_bb;
+                        move_List[(int)enumPiece.P, i].target_bb |= pawn_attack[(int)enumSide.white, pawns_index[i]] & bPiece_bb;
                         move_List[(int)enumPiece.P, i].target_bb |= wPawnsSinglePushTarget(pieces_bb[(int)enumPiece.P], ~occupancy) & nortOne((UInt64)1 << pawns_index[i]);
                         move_List[(int)enumPiece.P, i].target_bb |= wPawnsDoublePushTarget(pieces_bb[(int)enumPiece.P], ~occupancy) & nortOne(nortOne((UInt64)1 << pawns_index[i]));
                         if (!enpassant_bitboard.Equals(empty))
@@ -1119,6 +1314,22 @@ public class Board : TileMap
             else
             {
                 pin_bitboard = gen_pin_bitboard(ls1b_index(pieces_bb[(int)enumPiece.k]), (enumSide)side, occupancy);
+                if (count_bits(pin_bitboard) > 0)
+                {
+                    pin_attacker_mask = gen_pin_attacker_bitboard(ls1b_index(pieces_bb[(int)enumPiece.k]), (enumSide)side, occupancy);
+                    List<UInt64> ray_list = new List<UInt64>();
+                    foreach(int pin_piece in get_bits_index_array(pin_bitboard))
+                    {
+                        foreach(int attacking_piece in get_bits_index_array(pin_attacker_mask))
+                        {
+                            if (!draw_bit_ray(pin_piece, attacking_piece).Equals(empty))
+                            {
+                                ray_list.Add(draw_bit_ray(pin_piece, attacking_piece));
+                            }
+                        }
+                    }
+                    pin_ray = ray_list.ToArray();
+                }
                 //knight
                 int[] moveable_knights_index = get_bits_index_array(pieces_bb[(int)enumPiece.n] & ~pin_bitboard);
                 for (i = 0; i < moveable_knights_index.Count(); i++)
@@ -1136,11 +1347,14 @@ public class Board : TileMap
                 {
                     if (pin_rooks_index.Contains(rooks_index[i])){
                         move_List[(int)enumPiece.r, i].source = rooks_index[i];
-                        move_List[(int)enumPiece.r, i].target_bb = get_rook_attacks(rooks_index[i], occupancy) & draw_bit_ray(rooks_index[i], ls1b_index(pieces_bb[(int)enumPiece.k]));
+                        foreach(UInt64 ray in pin_ray)
+                        {
+                            move_List[(int)enumPiece.r, i].target_bb |= get_rook_attacks(rooks_index[i], occupancy) & draw_bit_ray(ls1b_index(ray & pin_attacker_mask), ls1b_index(pieces_bb[(int)enumPiece.k]));
+                        }
                         move_List[(int)enumPiece.r, i].target_bb &= ~bPiece_bb;
                     } else {
                         move_List[(int)enumPiece.r, i].source = rooks_index[i];
-                        move_List[(int)enumPiece.r, i].target_bb = get_rook_attacks(rooks_index[i], occupancy);
+                        move_List[(int)enumPiece.r, i].target_bb |= get_rook_attacks(rooks_index[i], occupancy);
                         move_List[(int)enumPiece.r, i].target_bb &= ~bPiece_bb;
                     }
                 }
@@ -1152,51 +1366,64 @@ public class Board : TileMap
                 {
                     if (pin_bishops_index.Contains(bishops_index[i])){
                         move_List[(int)enumPiece.b, i].source = bishops_index[i];
-                        move_List[(int)enumPiece.b, i].target_bb = get_bishop_attacks(bishops_index[i], occupancy) & draw_bit_ray(bishops_index[i], ls1b_index(pieces_bb[(int)enumPiece.k]));
+                        foreach(UInt64 ray in pin_ray)
+                        {
+                            move_List[(int)enumPiece.b, i].target_bb |= get_bishop_attacks(bishops_index[i], occupancy) & draw_bit_ray(ls1b_index(ray & pin_attacker_mask), ls1b_index(pieces_bb[(int)enumPiece.k]));
+                        }
                         move_List[(int)enumPiece.b, i].target_bb &= ~bPiece_bb;
                     } else {
                         move_List[(int)enumPiece.b, i].source = bishops_index[i];
-                        move_List[(int)enumPiece.b, i].target_bb = get_bishop_attacks(bishops_index[i], occupancy);
+                        move_List[(int)enumPiece.b, i].target_bb |= get_bishop_attacks(bishops_index[i], occupancy);
                         move_List[(int)enumPiece.b, i].target_bb &= ~bPiece_bb;
                     }
                 }
 
                 //queen
                 int queen_index = ls1b_index(pieces_bb[(int)enumPiece.q]);
-                if ((pieces_bb[(int)enumPiece.q] & pin_bitboard).Equals(empty))
+                if (((pieces_bb[(int)enumPiece.q] & pin_bitboard).Equals(empty)) && (queen_index != -1))
                 {
                     move_List[(int)enumPiece.q, 0].source = queen_index;
                     move_List[(int)enumPiece.q, 0].target_bb = get_queen_attacks(queen_index, occupancy);
                     move_List[(int)enumPiece.q, 0].target_bb &= ~bPiece_bb;
                 } else {
-                    move_List[(int)enumPiece.q, 0].source = queen_index;
-                    move_List[(int)enumPiece.q, 0].target_bb = get_queen_attacks(queen_index, occupancy) & draw_bit_ray(queen_index, ls1b_index(pieces_bb[(int)enumPiece.k]));
-                    move_List[(int)enumPiece.q, 0].target_bb &= ~bPiece_bb;
+                    if (queen_index != -1)
+                    {
+                        move_List[(int)enumPiece.q, 0].source = queen_index;
+                        foreach (UInt64 ray in pin_ray)
+                        {
+                            move_List[(int)enumPiece.q, 0].target_bb |= get_queen_attacks(queen_index, occupancy) & draw_bit_ray(ls1b_index(ray & pin_attacker_mask), ls1b_index(pieces_bb[(int)enumPiece.k]));
+                        }
+                        move_List[(int)enumPiece.q, 0].target_bb &= ~bPiece_bb;
+                    }
                 }
 
                 //pawn
                 int[] pawns_index = get_bits_index_array(pieces_bb[(int)enumPiece.p]);
                 int[] push_pawns_index = get_bits_index_array(bPawnsSinglePushSource(pieces_bb[(int)enumPiece.p], ~occupancy));
-                int[] pin_pawns_index = get_bits_index_array(bPawnsSinglePushSource(pieces_bb[(int)enumPiece.p], ~occupancy) & pin_bitboard);
+                int[] pin_pawns_index = get_bits_index_array(pieces_bb[(int)enumPiece.p] & pin_bitboard);
 
                 for (i = 0; i < pawns_index.Count(); i++)
                 {
                     if (pin_pawns_index.Contains(pawns_index[i]))
                     {
                         move_List[(int)enumPiece.p, i].source = pawns_index[i];
-                        move_List[(int)enumPiece.p, i].target_bb = pawn_attack[(int)enumSide.black, pawns_index[i]] & draw_bit_ray(pawns_index[i], ls1b_index(pieces_bb[(int)enumPiece.k])) & wPiece_bb;
-                        move_List[(int)enumPiece.p, i].target_bb |= bPawnsSinglePushTarget(pieces_bb[(int)enumPiece.p] & pin_bitboard, ~occupancy) & draw_bit_ray(pawns_index[i], ls1b_index(pieces_bb[(int)enumPiece.k])) | bPawnsDoublePushTarget(pieces_bb[(int)enumPiece.p] & pin_bitboard, ~occupancy) & draw_bit_ray(pawns_index[i], ls1b_index(pieces_bb[(int)enumPiece.k]));
-                        if (!enpassant_bitboard.Equals(empty))
+                        foreach(UInt64 ray in pin_ray)
                         {
-                            if(!(pawn_attack[(int)enumSide.black, pawns_index[i]] & draw_bit_ray(pawns_index[i], ls1b_index(pieces_bb[(int)enumPiece.k])) & bPiece_bb).Equals(empty))
+                            move_List[(int)enumPiece.p, i].target_bb |= pawn_attack[(int)enumSide.black, pawns_index[i]] & draw_bit_ray(ls1b_index(ray & pin_attacker_mask), ls1b_index(pieces_bb[(int)enumPiece.k])) & wPiece_bb;
+                            move_List[(int)enumPiece.p, i].target_bb |= bPawnsSinglePushTarget(pieces_bb[(int)enumPiece.p] & pin_bitboard, ~occupancy) & draw_bit_ray(ls1b_index(ray & pin_attacker_mask), ls1b_index(pieces_bb[(int)enumPiece.k]));
+                            move_List[(int)enumPiece.p, i].target_bb |= bPawnsDoublePushTarget(pieces_bb[(int)enumPiece.p] & pin_bitboard, ~occupancy) & draw_bit_ray(ls1b_index(ray & pin_attacker_mask), ls1b_index(pieces_bb[(int)enumPiece.k]));
+                            if (!enpassant_bitboard.Equals(empty))
                             {
-                                move_List[(int)enumPiece.p, i].target_bb |= pawn_attack[(int)enumSide.black, pawns_index[i]] & draw_bit_ray(pawns_index[i], ls1b_index(pieces_bb[(int)enumPiece.k])) & enpassant_bitboard;
-                                move_List[(int)enumPiece.p, i].flag = "enpassant";
+                                if(!(pawn_attack[(int)enumSide.black, pawns_index[i]] & draw_bit_ray(ls1b_index(ray & pin_attacker_mask), ls1b_index(pieces_bb[(int)enumPiece.k])) & bPiece_bb).Equals(empty))
+                                {
+                                    move_List[(int)enumPiece.p, i].target_bb |= pawn_attack[(int)enumSide.black, pawns_index[i]] & draw_bit_ray(ls1b_index(ray & pin_attacker_mask), ls1b_index(pieces_bb[(int)enumPiece.k])) & enpassant_bitboard;
+                                    move_List[(int)enumPiece.p, i].flag = "enpassant";
+                                }
                             }
-                        }
+                        }   
                     } else {
                         move_List[(int)enumPiece.p, i].source = pawns_index[i];
-                        move_List[(int)enumPiece.p, i].target_bb = pawn_attack[(int)enumSide.black, pawns_index[i]] & wPiece_bb;
+                        move_List[(int)enumPiece.p, i].target_bb |= pawn_attack[(int)enumSide.black, pawns_index[i]] & wPiece_bb;
                         move_List[(int)enumPiece.p, i].target_bb |= bPawnsSinglePushTarget(pieces_bb[(int)enumPiece.p], ~occupancy) & soutOne((UInt64)1 << pawns_index[i]);
                         move_List[(int)enumPiece.p, i].target_bb |= bPawnsDoublePushTarget(pieces_bb[(int)enumPiece.p], ~occupancy) & soutOne(soutOne((UInt64)1 << pawns_index[i]));
                         if (!enpassant_bitboard.Equals(empty))
@@ -1271,7 +1498,8 @@ public class Board : TileMap
         }
     }
 
-    public void load_boardstate(UInt64[] bb)
+    String movelist = "";
+    public void load_boardstate(UInt64[] bb, move_list[,] list)
     {
         wPiece_bb = bb[0];
         bPiece_bb = bb[1];
@@ -1282,6 +1510,7 @@ public class Board : TileMap
         enpassant_bitboard = bb[14];
         enpassant_target = ls1b_index(bb[15]);
         castle_right = (int)bb[16];
+        move_List = list;
     }
 
     public void check_endgame(int side)
@@ -1440,7 +1669,18 @@ public class Board : TileMap
                 case (int)enumSquare.a8: castle_right &= 7; break; //0111
             }
         }
+        movelist += " " + square[source] + square[target];
+        Debug.WriteLine(movelist);
         return true;
+    }
+
+    public void play_next(int side)
+    {
+        if (side == (int)enumSide.white)
+            gen_legal_move((int)enumSide.white);
+        else gen_legal_move((int)enumSide.black);
+
+        stockfish_next_move(movelist);
     }
 
     public void enpassant(Node2D piece ,int source, int target)
@@ -1462,47 +1702,60 @@ public class Board : TileMap
         {
             bPiece_bb |= pieces_bb[i];
         }
+
+        movelist += " " + square[source] + square[target];
+        Debug.WriteLine(movelist);
     }
 
     public void castle(int castle)
     {
+        int source = -1;
+        int target = -1;
         if (castle == 1)
         {
             //white short castle
+            source = (int)enumSquare.e1;
+            target = (int)enumSquare.g1;
             Node2D king = (Node2D)GetNode("/root/Main/king_white");
             Node2D rook = (Node2D)GetNode("/root/Main/rook_white_2");
             pieces_bb[(int)enumPiece.K] = set_bit(empty, (int)enumSquare.g1);
-            pieces_bb[(int)enumPiece.R] = set_bit((pieces_bb[(int)enumPiece.R] & ((UInt64)1 << (int)enumSquare.h1)), (int)enumSquare.f1);
+            pieces_bb[(int)enumPiece.R] = set_bit((pieces_bb[(int)enumPiece.R] & ~((UInt64)1 << (int)enumSquare.h1)), (int)enumSquare.f1);
             king.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.g1)) + this.CellSize * 2 / 4;
             rook.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.f1)) + this.CellSize * 2 / 4;
         }
         if (castle == 2)
         {
             //white long castle
+            source = (int)enumSquare.e1;
+            target = (int)enumSquare.c1;
             Node2D king = (Node2D)GetNode("/root/Main/king_white");
             Node2D rook = (Node2D)GetNode("/root/Main/rook_white_1");
             pieces_bb[(int)enumPiece.K] = set_bit(empty, (int)enumSquare.c1);
-            pieces_bb[(int)enumPiece.R] = set_bit((pieces_bb[(int)enumPiece.R] & ((UInt64)1 << (int)enumSquare.a1)), (int)enumSquare.d1);
+            pieces_bb[(int)enumPiece.R] = set_bit((pieces_bb[(int)enumPiece.R] & ~((UInt64)1 << (int)enumSquare.a1)), (int)enumSquare.d1);
             king.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.c1)) + this.CellSize * 2 / 4;
             rook.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.d1)) + this.CellSize * 2 / 4;
         }
         if (castle == 4)
         {
             //black short castle
+            source = (int)enumSquare.e8;
+            target = (int)enumSquare.g8;
             Node2D king = (Node2D)GetNode("/root/Main/king_black");
             Node2D rook = (Node2D)GetNode("/root/Main/rook_black_2");
             pieces_bb[(int)enumPiece.k] = set_bit(empty, (int)enumSquare.g8);
-            pieces_bb[(int)enumPiece.r] = set_bit((pieces_bb[(int)enumPiece.r] & ((UInt64)1 << (int)enumSquare.h8)), (int)enumSquare.f8);
+            pieces_bb[(int)enumPiece.r] = set_bit((pieces_bb[(int)enumPiece.r] & ~((UInt64)1 << (int)enumSquare.h8)), (int)enumSquare.f8);
             king.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.g8)) + this.CellSize * 2 / 4;
             rook.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.f8)) + this.CellSize * 2 / 4;
         }
         if (castle == 8)
         {
             //black long castle
+            source = (int)enumSquare.e8;
+            target = (int)enumSquare.c8;
             Node2D king = (Node2D)GetNode("/root/Main/king_black");
             Node2D rook = (Node2D)GetNode("/root/Main/rook_black_1");
             pieces_bb[(int)enumPiece.k] = set_bit(empty, (int)enumSquare.c8);
-            pieces_bb[(int)enumPiece.r] = set_bit((pieces_bb[(int)enumPiece.r] & ((UInt64)1 << (int)enumSquare.a8)), (int)enumSquare.d8);
+            pieces_bb[(int)enumPiece.r] = set_bit((pieces_bb[(int)enumPiece.r] & ~((UInt64)1 << (int)enumSquare.a8)), (int)enumSquare.d8);
             king.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.c8)) + this.CellSize * 2 / 4;
             rook.GlobalPosition = this.MapToWorld(square_to_pos((int)enumSquare.d8)) + this.CellSize * 2 / 4;
         }
@@ -1518,6 +1771,9 @@ public class Board : TileMap
         {
             bPiece_bb |= pieces_bb[i];
         }
+
+        movelist += " " + square[source] + square[target];
+        Debug.WriteLine(movelist);
     }
 
     public struct move_list
@@ -1542,214 +1798,13 @@ public class Board : TileMap
         }
     }
 
-    public void enpassant_perft(int source, int target)
-    {
-        pieces_bb[get_piece_type(enpassant_target)] &= ~((UInt64)1 << enpassant_target);
-
-        enpassant_bitboard = 0;
-        enpassant_target = -1;
-
-        pieces_bb[get_piece_type(source)] = set_bit(pieces_bb[get_piece_type(source)] & ~((UInt64)1 << source), target);
-        wPiece_bb = bPiece_bb = empty;
-        for (int i = 0; i < 6; i++)
-        {
-            wPiece_bb |= pieces_bb[i];
-        }
-        for (int i = 6; i < 12; i++)
-        {
-            bPiece_bb |= pieces_bb[i];
-        }
-    }
-
-    public void castle_perft(int castle)
-    {
-        if (castle == 1)
-        {
-            //white short castle
-            pieces_bb[(int)enumPiece.K] = set_bit(empty, (int)enumSquare.g1);
-            pieces_bb[(int)enumPiece.R] = set_bit(empty, (int)enumSquare.f1);
-        }
-        if (castle == 2)
-        {
-           //white long castle
-            pieces_bb[(int)enumPiece.K] = set_bit(empty, (int)enumSquare.c1);
-            pieces_bb[(int)enumPiece.R] = set_bit(empty, (int)enumSquare.d1);
-        }
-        if (castle == 4)
-        {
-            //black short castle
-            pieces_bb[(int)enumPiece.k] = set_bit(empty, (int)enumSquare.g8);
-            pieces_bb[(int)enumPiece.r] = set_bit(empty, (int)enumSquare.f8);
-        }
-        if (castle == 8)
-        {
-            //black long castle
-            pieces_bb[(int)enumPiece.k] = set_bit(empty, (int)enumSquare.c8);
-            pieces_bb[(int)enumPiece.r] = set_bit(empty, (int)enumSquare.d8);
-        }
-
-        wPiece_bb = bPiece_bb = empty;
-        for (int i = 0; i < 6; i++)
-        {
-            wPiece_bb |= pieces_bb[i];
-        }
-        for (int i = 6; i < 12; i++)
-        {
-            bPiece_bb |= pieces_bb[i];
-        }
-    }
-
-    public int make_move_perft(int source, int target)
-    {
-        if (get_piece_type(source) == (int)enumPiece.P || get_piece_type(source) == (int)enumPiece.p)
-        {
-            if (target == ls1b_index(enpassant_bitboard))
-            {
-                for (int i = 0; i < 8; i++)
-                {
-                    if (move_List[get_piece_type(source), i].target_array.Contains(target) && move_List[get_piece_type(source), i].flag == "enpassant")
-                    {
-                        enpassant_perft(source, target);
-                        return target;
-                    }
-                }
-            }
-        }
-
-        if (get_piece_type(source) == (int)enumPiece.K || get_piece_type(source) == (int)enumPiece.k)
-        {
-            if (target == (int)enumSquare.g1 && move_List[(int)enumPiece.K, 0].target_array.Contains(target) && move_List[(int)enumPiece.K, 0].source == (int)enumSquare.e1)
-            {
-                castle_perft((int)enumCastle.wk);
-                return target;
-            }
-            if (target == (int)enumSquare.c1 && move_List[(int)enumPiece.K, 0].target_array.Contains(target) && move_List[(int)enumPiece.K, 0].source == (int)enumSquare.e1)
-            {
-                castle_perft((int)enumCastle.wq);
-                return target;
-            }
-            if (target == (int)enumSquare.g8 && move_List[(int)enumPiece.k, 0].target_array.Contains(target) && move_List[(int)enumPiece.k, 0].source == (int)enumSquare.e8)
-            {
-                castle_perft((int)enumCastle.bk);
-                return target;
-            }
-            if (target == (int)enumSquare.c8 && move_List[(int)enumPiece.k, 0].target_array.Contains(target) && move_List[(int)enumPiece.k, 0].source == (int)enumSquare.e8)
-            {
-                castle_perft((int)enumCastle.bq);
-                return target;
-            }
-        }
-
-        UInt64 occupancy = wPiece_bb | bPiece_bb;
-        if (!(((UInt64)1 << target) & occupancy).Equals(empty))
-        {
-            pieces_bb[get_piece_type(target)] = pieces_bb[get_piece_type(target)] & ~((UInt64)1 << target);
-        }
-
-        pieces_bb[get_piece_type(source)] = set_bit(pieces_bb[get_piece_type(source)] & ~((UInt64)1 << source), target);
-        wPiece_bb = bPiece_bb = empty;
-        for (int i = 0; i < 6; i++)
-        {
-            wPiece_bb |= pieces_bb[i];
-        }
-        for (int i = 6; i < 12; i++)
-        {
-            bPiece_bb |= pieces_bb[i];
-        }
-        enpassant_bitboard = empty;
-        enpassant_target = -1;
-        if(get_piece_type(source) == (int)enumPiece.P || get_piece_type(source) == (int)enumPiece.p)
-        {
-            if(target == ls1b_index(nortOne(nortOne(set_bit(empty, source)))))
-            {
-                enpassant_bitboard = soutOne(set_bit(empty, target));
-                enpassant_target = target;
-            }
-            if(target == ls1b_index(soutOne(soutOne(set_bit(empty, source)))))
-            {
-                enpassant_bitboard = nortOne(set_bit(empty, target));
-                enpassant_target = target;
-            }
-        }
-        if(get_piece_type(source) == (int)enumPiece.K || get_piece_type(source) == (int)enumPiece.k)
-        {
-            if (get_piece_type(source) == (int)enumPiece.K) castle_right &= 12;
-            else castle_right &= 3;
-        }
-        if(get_piece_type(source) == (int)enumPiece.R || get_piece_type(source) == (int)enumPiece.r)
-        {
-            switch(source)
-            {
-                case (int)enumSquare.h1: castle_right &= 14; break; //1110
-                case (int)enumSquare.a1: castle_right &= 13; break; //1101
-                case (int)enumSquare.h8: castle_right &= 11; break; //1011
-                case (int)enumSquare.a8: castle_right &= 7; break; //0111
-            }
-        }
-        return target;
-    }
-
-    public UInt64 perft(int depth, bool side)
-    {
-        UInt64 nodes = 0;
-        int count = 0;
-        UInt64[] bb = new UInt64[17];
-        move_list[,] perft_move_Lists = new move_list[12, 8];
-
-        save_boardstate();
-        bb[0] = save_wPiece_bb;
-        bb[1] = save_bPiece_bb;
-        for (int i = 2; i < 14; i++)
-        {
-            bb[i] = save_pieces_bb[i - 2];
-        }
-        bb[14] = enpassant_bitboard;
-        bb[15] = set_bit(empty, enpassant_target);
-        bb[16] = (UInt64)castle_right;
-
-        if (side) {
-            perft_move_Lists = gen_legal_move((int)enumSide.white);
-        } else {
-            perft_move_Lists = gen_legal_move((int)enumSide.black);
-        }
-
-        if (depth == 1)
-        {
-            for (int i = 0; i < perft_move_Lists.GetLength(0); i++)
-            {
-                for (int j = 0; j < perft_move_Lists.GetLength(1); j++)
-                {
-                    if (perft_move_Lists[i, j].target_array.Count() != 0)
-                    {
-                        count += perft_move_Lists[i, j].target_array.Count();
-                    }
-                }
-            }
-            return (UInt64)count;
-        }
-
-        for (int i = 0; i < perft_move_Lists.GetLength(0); i++)
-        {
-            for (int j = 0; j < perft_move_Lists.GetLength(1); j++)
-            {
-                for (int k = 0; k < perft_move_Lists[i, j].target_array.Count(); k++)
-                {
-                    make_move_perft(perft_move_Lists[i, j].source, perft_move_Lists[i, j].target_array[k]);
-                    nodes += perft(depth - 1, !side);
-                    load_boardstate(bb);
-                }
-            }
-        }
-
-        return nodes;
-    }
-
     Node2D main;
     public override void _Ready()
     {
         main = (Node2D)GetNode("/root/Main");
         init_all();
 
+        // Start position
         pieces_bb[(int)enumPiece.K] = 0x0000000000000010;
         pieces_bb[(int)enumPiece.k] = 0x1000000000000000;
         pieces_bb[(int)enumPiece.Q] = 0x0000000000000008;
@@ -1769,16 +1824,6 @@ public class Board : TileMap
         castle_right = 15; //binary 1111: both side can castle king & queen side
         enpassant_target = -1;
         enpassant_bitboard = 0;
-
-        var watch = new System.Diagnostics.Stopwatch();
-            
-        watch.Start();
-
-        GD.Print(perft(4, true)); //perft(4) = 197,281 //perft(5) = 4,865,609 //perft(6) = 119,060,324
-
-        watch.Stop();
-
-        GD.Print(watch.ElapsedMilliseconds);
     }
 
     // Called every frame. 'delta' is the elapsed time since the previous frame.
